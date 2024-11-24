@@ -4,6 +4,8 @@ from __future__ import annotations
 import json
 
 import os
+import psutil
+import subprocess
 from typing import Any, Union, Mapping
 from typing_extensions import Self, override
 
@@ -152,6 +154,53 @@ class LlamaStackClient(SyncAPIClient):
             "X-Stainless-Async": "false",
             **self._custom_headers,
         }
+    
+
+    def _get_size(self, bytes):
+        for unit in ['', 'K', 'M', 'G', 'T', 'P']:
+            if bytes < 1024:
+                return f"{bytes:.2f}{unit}B"
+            bytes /= 1024
+            
+    def check_system_resources(self, model_name):
+        # CPU
+        cpu_percent = psutil.cpu_percent(interval=1)
+        
+        # Memory
+        mem = psutil.virtual_memory()
+        mem_used = self._get_size(mem.used)
+        mem_total = self._get_size(mem.total)
+        mem_percent = mem.percent
+        
+        # GPU
+        try:
+            gpu_info = subprocess.check_output(
+                ['nvidia-smi', '--query-gpu=utilization.gpu,memory.used,memory.total', '--format=csv,noheader,nounits']
+            ).decode('utf-8').strip().split(',')
+            gpu_util = f"{gpu_info[0].strip()}%"
+            gpu_mem = f"{gpu_info[1].strip()}MB / {gpu_info[2].strip()}MB"
+        except:
+            gpu_util = "N/A"
+            gpu_mem = "N/A"
+            
+        print(f"Available resources for {model_name}")
+        print(f"CPU Usage: {cpu_percent}%")
+        print(f"Memory: {mem_used} / {mem_total} ({mem_percent}%)")
+        print(f"GPU Util: {gpu_util}")
+        print(f"GPU Memory: {gpu_mem}")
+        
+        return {
+            "cpu_percent": cpu_percent,
+            "mem_used": mem_used,
+            "mem_total": mem_total,
+            "mem_percent": mem_percent,
+            "gpu_util": gpu_util,
+            "gpu_mem": gpu_mem
+        }
+
+    def check_recommended_resources(self, recommendation_json) -> None:
+        
+        
 
     def copy(
         self,
@@ -533,3 +582,68 @@ class AsyncLlamaStackClientWithStreamedResponse:
 Client = LlamaStackClient
 
 AsyncClient = AsyncLlamaStackClient
+
+LLAMA_32_3B_REQUIREMENTS = {
+    "hardware_requirements": {
+        "cpu": {
+            "type": "Multicore processor",
+            "minimum_cores": None,  # Not specified
+            "notes": "General multicore processor required"
+        },
+        "ram": {
+            "minimum_gb": 16,
+            "notes": "Recommended minimum"
+        },
+        "gpu": {
+            "recommended_type": "NVIDIA RTX series",
+            "minimum_vram_gb": 8,
+            "notes": "For optimal performance"
+        },
+        "storage": {
+            "space_required": "Variable",
+            "notes": "Sufficient for model files, size varies by model"
+        }
+    }
+}
+
+LLAMA_32_90B_VISION_REQUIREMENTS = {
+    "model_name": "Llama-3.2-90B-Vision",
+    "hardware_requirements": {
+        "gpu": {
+            "minimum_vram_gb": 180,
+            "recommended_cards": ["NVIDIA A100 80GB"],
+            "notes": "Multiple lower-capacity GPUs can be used in parallel for inference"
+        },
+        "cpu": {
+            "minimum_cores": 32,
+            "recommended": [
+                "Latest AMD EPYC",
+                "Latest Intel Xeon"
+            ]
+        },
+        "ram": {
+            "minimum_gb": 256,
+            "recommended_gb": 512,
+            "notes": "For optimal performance"
+        },
+        "storage": {
+            "type": "NVMe SSD",
+            "minimum_free_space_gb": 500,
+            "model_size_gb": 180
+        }
+    },
+    "software_requirements": {
+        "operating_system": {
+            "primary": "Linux",
+            "recommended": "Ubuntu 20.04 LTS or higher",
+            "alternative": {
+                "name": "Windows",
+                "notes": "Supported with specific optimizations"
+            }
+        }
+    },
+    "quantization_options": {
+        "supported": True,
+        "notes": "Can be quantized for lower resource usage"
+    }
+}
