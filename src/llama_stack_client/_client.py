@@ -198,8 +198,15 @@ class LlamaStackClient(SyncAPIClient):
             "gpu_mem": gpu_mem
         }
 
-    def check_recommended_resources(self, recommendation_json) -> None:
-        
+    def check_recommended_resources(self, model_name, recommendation_json) -> None:
+       if recommendation_json["system_resources"]["cpu"] < model_requirements_dict[model_name]["cpu"]:
+           raise ValueError(f"CPU does not meet the recommended requirements: {model_requirements_dict[model_name]['cpu']} cores")
+        if recommendation_json["system_resources"]["ram"] < model_requirements_dict[model_name]["ram"]:
+            raise ValueError(f"RAM does not meet the recommended requirements: {model_requirements_dict[model_name]['ram']} GB")
+        if recommendation_json["system_resources"]["gpu"] < model_requirements_dict[model_name]["gpu"]:
+            raise ValueError(f"GPU does not meet the recommended requirements: {model_requirements_dict[model_name]['gpu']} GB")
+        if recommendation_json["system_resources"]["storage"] < model_requirements_dict[model_name]["storage"]:
+            raise ValueError(f"Storage does not meet the recommended requirements: {model_requirements_dict[model_name]['storage']} GB")
         
 
     def copy(
@@ -646,4 +653,9 @@ LLAMA_32_90B_VISION_REQUIREMENTS = {
         "supported": True,
         "notes": "Can be quantized for lower resource usage"
     }
+}
+
+model_requirements_dict = {
+    "Llama-3.2:latest": LLAMA_32_3B_REQUIREMENTS,
+    "Llama-3.2-90B-Vision": LLAMA_32_90B_VISION_REQUIREMENTS
 }
